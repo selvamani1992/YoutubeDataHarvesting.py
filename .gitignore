@@ -3,4 +3,4 @@ venv/
 
 # Ignore IDE-specific files
 .streamlit/
-.vscode/
+.idea/

@@ -5,12 +5,12 @@ import psycopg2
 import streamlit as st
 from streamlit_option_menu import option_menu
 
-client = pymongo.MongoClient("mongodb://<username:password>@ac-hdblj4l-shard-00-00.xb5edcj.mongodb.net:27017,ac-hdblj4l-shard-00-01.xb5edcj.mongodb.net:27017,ac-hdblj4l-shard-00-02.xb5edcj.mongodb.net:27017/?ssl=true&replicaSet=atlas-7gqhz2-shard-0&authSource=admin&retryWrites=true&w=majority")
+client = pymongo.MongoClient("mongodb://selva7025:generate@ac-hdblj4l-shard-00-00.xb5edcj.mongodb.net:27017,ac-hdblj4l-shard-00-01.xb5edcj.mongodb.net:27017,ac-hdblj4l-shard-00-02.xb5edcj.mongodb.net:27017/?ssl=true&replicaSet=atlas-7gqhz2-shard-0&authSource=admin&retryWrites=true&w=majority")
 mg_db = client['Channel_Database']
-selva = psycopg2.connect(host="localhost", user="postgres", password="password", port=5432, database="YoutubeData")
+selva = psycopg2.connect(host="localhost", user="postgres", password="Selva@123", port=5432, database="YoutubeData")
 guvi = selva.cursor()
 
-api_key = "api_key"
+api_key = "AIzaSyCdBXwPdmoRQgC06ggq28z64BoHtZX-Vjg"
 youtube = build('youtube', 'v3', developerKey=api_key)
 # channel_id = 'UCmhRdtdgJCa7mg4Jjv4zAmA' trident
 # channel_id = "UCnKhQkCUS1oCEvjuTfU4xIw" Techboss
@@ -378,9 +378,42 @@ elif selected == 'Migrate':
         comment_sql(comment_mong)
         st.markdown('__<p style="text-align:center; font-size: 20px; color: #FAA026">Data Migrated to SQL</P>__',
                     unsafe_allow_html=True)
-        # dataframe = True
-        #if  dataframe:
-            # tab1, tab2, tab3 = st.tabs(['Channel Info','Video Info','Comment Info'])
+        dataframe = True
+        if dataframe:
+            tab1, tab2, tab3 = st.tabs(['Channel Info','Video Info','Comment Info'])
+            with tab1:
+                guvi.execute(f"select * from channel_table where channel_name = '{select_channel}'")
+                y = guvi.fetchall()
+                channel_df_mig = pd.DataFrame(y,columns=['Channel ID','Channel Name','Subscribers','Total Views','Total Videos'])
+                channel_df_mig = channel_df_mig.T
+                channel_df_mig = channel_df_mig.rename(columns={0: 'Details'})
+                st.dataframe(channel_df_mig)
+
+            with tab2:
+                guvi.execute(f"select video_table.title, video_table.published_date, "
+                             f"video_table.category_id, video_table.duration, video_table.view_count, "
+                             f"video_table.like_count, video_table.comment_count from video_table join channel_table "
+                             f"on video_table.channel_id = channel_table.channel_id "
+                             f"where channel_table.channel_name = '{select_channel}'")
+                y = guvi.fetchall()
+                video_df_mig = pd.DataFrame(y, columns=['Video Name', 'Posted On', 'Category',
+                                                          'Duration','Views','Likes','Total Comments/replies'])
+                video_df_mig = video_df_mig.set_index('Video Name')
+                st.dataframe(video_df_mig)
+            with tab3:
+                guvi.execute(f"select chan_video.title, comment_table.comment, comment_table.comment_author, "
+                             f"comment_table.comment_date,comment_table.comment_like,comment_table.replycount  "
+                             f"from comment_table join (select video_table.video_id as video_id,video_table.title "
+                             f"as title,channel_table.channel_name as name from video_table join channel_table "
+                             f"on video_table.channel_id = channel_table.channel_id "
+                             f"where channel_table.channel_name = '{select_channel}') as chan_video "
+                             f"on comment_table.video_id = chan_video.video_id where chan_video.name = '{select_channel}'")
+                y = guvi.fetchall()
+                comment_df_mig = pd.DataFrame(y, columns=['Video Name', 'Comment', 'Author',
+                                                        'Commented On', 'Likes', 'replies'])
+                comment_df_mig = comment_df_mig.set_index('Video Name')
+                st.dataframe(comment_df_mig)
+
 elif selected == "FAQ":
     st.markdown('__<p style="text-align:left; font-size: 30px; color: #FAA026">Top 10 FAQs</P>__',
                 unsafe_allow_html=True)
