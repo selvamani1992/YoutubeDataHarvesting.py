@@ -7,9 +7,9 @@ from streamlit_option_menu import option_menu
 import plotly.express as px
 import plotly.figure_factory as ff
 
-client = pymongo.MongoClient("mongodb://selva7025:generate@ac-hdblj4l-shard-00-00.xb5edcj.mongodb.net:27017,ac-hdblj4l-shard-00-01.xb5edcj.mongodb.net:27017,ac-hdblj4l-shard-00-02.xb5edcj.mongodb.net:27017/?ssl=true&replicaSet=atlas-7gqhz2-shard-0&authSource=admin&retryWrites=true&w=majority")
+client = pymongo.MongoClient("mongodb://<username:passw>@ac-hdblj4l-shard-00-00.xb5edcj.mongodb.net:27017,ac-hdblj4l-shard-00-01.xb5edcj.mongodb.net:27017,ac-hdblj4l-shard-00-02.xb5edcj.mongodb.net:27017/?ssl=true&replicaSet=atlas-7gqhz2-shard-0&authSource=admin&retryWrites=true&w=majority")
 mg_db = client['Channel_Database']
-selva = psycopg2.connect(host="localhost", user="postgres", password="Selva@123", port=5432, database="YoutubeData")
+selva = psycopg2.connect(host="localhost", user="postgres", password="123456", port=5432, database="YoutubeData")
 guvi = selva.cursor()
 
 api_key = "AIzaSyCdBXwPdmoRQgC06ggq28z64BoHtZX-Vjg"
