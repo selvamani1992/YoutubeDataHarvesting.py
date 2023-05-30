@@ -4,6 +4,8 @@ import pymongo
 import psycopg2
 import streamlit as st
 from streamlit_option_menu import option_menu
+import plotly.express as px
+import plotly.figure_factory as ff
 
 client = pymongo.MongoClient("mongodb://selva7025:generate@ac-hdblj4l-shard-00-00.xb5edcj.mongodb.net:27017,ac-hdblj4l-shard-00-01.xb5edcj.mongodb.net:27017,ac-hdblj4l-shard-00-02.xb5edcj.mongodb.net:27017/?ssl=true&replicaSet=atlas-7gqhz2-shard-0&authSource=admin&retryWrites=true&w=majority")
 mg_db = client['Channel_Database']
@@ -135,36 +137,41 @@ def get_video_stats(youtube, playlist_id):
     return all_video
 
 
-def get_comment_stats(youtube,video_ids):
+def update_comment_stats(youtube, video_ids, Channel_name):
+    channel_records1 = mg_db[channel_name]
+    a = channel_records1.find()
+    obj_id = a[0]['_id']
     comments = []
     for video_id in video_ids:
         next_page_token = None
         try:
-          request = youtube.commentThreads().list(part = 'snippet',
-                                                  videoId = video_id,
-                                                  maxResults = 50,
-                                                  pageToken = next_page_token)
-          response = request.execute()
-          while True:
-            if response['items']:
-              for item in response['items']:
-                comment_info = dict(comment_id = item['id'],
-                    video_id = item['snippet']['topLevelComment']['snippet']['videoId'],
-                    comment = item['snippet']['topLevelComment']['snippet']['textDisplay'],
-                    comment_author = item['snippet']['topLevelComment']['snippet']['authorDisplayName'],
-                    comment_date = item['snippet']['topLevelComment']['snippet']['publishedAt'])
-                try:
-                  comment_info['comment_like'] = item['snippet']['topLevelComment']['snippet']['likeCount']
-                except:
-                  comment_info['comment_like'] = 0
-                try:
-                  comment_info['totalReplyCount'] = item['snippet']['totalReplyCount']
-                except:
-                  comment_info['totalReplyCount'] = 0
-                comments.append(comment_info)
-            next_page_token = response.get(next_page_token)
-            if next_page_token is None:
-              break
+            while True:
+                request = youtube.commentThreads().list(part='snippet',
+                                                      videoId=video_id,
+                                                      maxResults=50,
+                                                      pageToken=next_page_token)
+                response = request.execute()
+                if response['items']:
+
+                    for item in response['items']:
+                        comment_info = dict(comment_id = item['id'],
+                            video_id = item['snippet']['topLevelComment']['snippet']['videoId'],
+                            comment = item['snippet']['topLevelComment']['snippet']['textDisplay'],
+                            comment_author = item['snippet']['topLevelComment']['snippet']['authorDisplayName'],
+                            comment_date = item['snippet']['topLevelComment']['snippet']['publishedAt'])
+                        try:
+                          comment_info['comment_like'] = item['snippet']['topLevelComment']['snippet']['likeCount']
+                        except:
+                          comment_info['comment_like'] = 0
+                        try:
+                          comment_info['totalReplyCount'] = item['snippet']['totalReplyCount']
+                        except:
+                          comment_info['totalReplyCount'] = 0
+                        comments.append(comment_info)
+                        channel_records1.update_one({'_id': obj_id}, {'$push': {'Comment_info': comment_info}})
+                    next_page_token = response.get('nextPageToken')
+                if next_page_token is None:
+                    break
         except:
           pass
     return comments
@@ -174,8 +181,7 @@ def retrieve_channel(youtube, channel_id):
     channel_statistics = get_channel_stats(youtube, channel_id)
     video_statistics = get_video_stats(youtube, channel_statistics['playlist_id'])
     video_df = pd.DataFrame(video_statistics)
-    video_ids = [item['video_id'] for item in video_statistics]
-    comment_statistics = get_comment_stats(youtube,video_ids)
+    comment_statistics = []
     channel = dict(Channel_info = channel_statistics, Video_info = video_statistics, Comment_info = comment_statistics)
     return channel
 
@@ -275,7 +281,9 @@ with st.sidebar:
         styles={"nav-link": {"--hover-color": "brown"}},
         orientation="vertical",
     )
+
 collection_list = sorted(mg_db.list_collection_names())
+
 if selected == 'Home':
 
     st.markdown('__<p style="font-family: verdana; text-align:left; font-size: 15px; color: #FAA026">Our web application provides an interactive platform to explore YouTube channels and their content. With just the YouTube channel ID, you can retrieve comprehensive information about any channel and dive into its details.</P>__',
@@ -326,13 +334,17 @@ elif selected == 'Harvest':
         Channel_mong = get_channel_stats(youtube, channel_id)
         if Channel_mong:
             channel_details = retrieve_channel(youtube, channel_id)
-            st.write('harvest completed')
-            st.write(channel_details)
             channel_name = channel_details['Channel_info']['Channel_name']
             channel_records = mg_db[channel_name]
             if channel_name in collection_list:
                 channel_records.delete_many({})
-            channel_records.insert_one(channel_details)
+            channel_records.insert_one(channel_details) #inserting channel & video Info
+            video_ids = [item['video_id'] for item in channel_details['Video_info']]
+            #inserting each comment to mongodb directly and also collecting all together and display in streamlit preview
+            comment = update_comment_stats(youtube, video_ids,channel_name)
+            channel_details['Comment_info'] = comment
+            st.write('harvest completed')
+            st.write(channel_details)
             st.write('Moved to MongoDB')
         else:
             st.write("")
@@ -340,7 +352,7 @@ elif selected == 'Harvest':
 elif selected == 'Migrate':
     col1,col2,col3 = st.columns([2,1,2])
     with col1:
-        select_channel = st.selectbox('Channels', collection_list)
+        select_channel = st.selectbox('Select Channel to migrate data to SQL:', collection_list)
     col4, col5, col6, col7 = st.columns([1, 1, 2, 2])
     with col4:
         Show = st.button("Show")
@@ -389,6 +401,7 @@ elif selected == 'Migrate':
                 channel_df_mig = channel_df_mig.rename(columns={0: 'Details'})
                 st.dataframe(channel_df_mig)
 
+
             with tab2:
                 guvi.execute(f"select video_table.title, video_table.published_date, "
                              f"video_table.category_id, video_table.duration, video_table.view_count, "
@@ -400,6 +413,7 @@ elif selected == 'Migrate':
                                                           'Duration','Views','Likes','Total Comments/replies'])
                 video_df_mig = video_df_mig.set_index('Video Name')
                 st.dataframe(video_df_mig)
+
             with tab3:
                 guvi.execute(f"select chan_video.title, comment_table.comment, comment_table.comment_author, "
                              f"comment_table.comment_date,comment_table.comment_like,comment_table.replycount  "
